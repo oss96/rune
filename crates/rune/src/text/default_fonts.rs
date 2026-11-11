@@ -17,6 +17,9 @@ pub(super) const DEFAULT_FONTS: &[&[u8]] = &[
     include_bytes!("../../assets/web/first/Inter-SemiBold.ttf"),
     include_bytes!("../../assets/IBMPlexMono-Regular.ttf"),
 ];
+/// Each of [`DEFAULT_FONTS`]' families, in order.
+#[cfg(all(target_arch = "wasm32", feature = "embedded-fonts"))]
+pub(super) const DEFAULT_FAMILIES: [&str; 4] = ["Inter", "Inter", "Inter", "IBM Plex Mono"];
 #[cfg(all(target_arch = "wasm32", not(any(test, feature = "embedded-fonts"))))]
 pub(super) const DEFAULT_FONTS: &[&[u8]] = &[];
 
