@@ -166,10 +166,37 @@ build_once() {
     # Cargo's dep-info lists path crates only, so an app that takes Rune from git finds it through cargo metadata.
     cut=$(tr ' ' '\n' < "${artifact%.wasm}.d" 2>/dev/null | tr '\\' '/' | grep -m1 '/assets/web/first/Inter-Regular\.ttf$' || true)
     if [[ -z $cut ]]; then
-        cut=$(cargo metadata --format-version 1 --offline 2>/dev/null | grep -o '"manifest_path":"[^"]*crates[/\\]*rune[/\\]*Cargo\.toml"' | head -1 \
-            | sed -e 's/^"manifest_path":"//' -e 's/"$//' -e 's#\\\\#/#g' -e 's#/Cargo\.toml$#/assets/web/first/Inter-Regular.ttf#' || true)
+        local graph
+        if ! graph=$("$cargo" metadata --format-version 1 --offline); then
+            echo "cargo metadata failed, so the full Inter faces can't be found." >&2
+            return 1
+        fi
+        cut=$(python3 -c '
+import json, os, sys
+meta = json.load(sys.stdin)
+packages = {p["id"]: p for p in meta["packages"]}
+deps = {n["id"]: [d["pkg"] for d in n["deps"]] for n in meta["resolve"]["nodes"]}
+app = next(i for i in meta["workspace_members"] if packages[i]["name"] == sys.argv[1])
+direct = [i for i in deps[app] if packages[i]["name"] == "rune"]
+seen, todo = set(), [app]
+while todo:
+    i = todo.pop()
+    if i not in seen:
+        seen.add(i)
+        todo.extend(deps[i])
+found = direct or sorted(i for i in seen if packages[i]["name"] == "rune")
+if found:
+    root = os.path.dirname(packages[found[0]]["manifest_path"])
+    print(os.path.join(root, "assets", "web", "first", "Inter-Regular.ttf").replace("\\", "/"))
+' "$package" <<<"$graph") || return 1
     fi
-    if [[ -n $cut && -f $cut ]]; then cp "${cut%/first/*}"/Inter-*.ttf "$next/"; fi
+    if [[ -n $cut ]]; then
+        if [[ ! -f $cut ]]; then
+            echo "Rune's full Inter faces aren't at ${cut%/first/*}." >&2
+            return 1
+        fi
+        cp "${cut%/first/*}"/Inter-*.ttf "$next/"
+    fi
     local entry
     for entry in "$next"/*; do
         if [[ -d $entry ]]; then
