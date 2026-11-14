@@ -163,8 +163,13 @@ build_once() {
     # Rune's default fonts embed Inter cut to Latin, Greek and Cyrillic text and fetch the full faces from beside
     # app.js once the first frame is up: copy those of the Rune this build embedded the cut from.
     local cut
-    cut=$(tr ' ' '\n' < "${artifact%.wasm}.d" 2>/dev/null | grep -m1 '/assets/web/first/Inter-Regular\.ttf$' || true)
-    if [[ -n $cut ]]; then cp "${cut%/first/*}"/Inter-*.ttf "$next/"; fi
+    # Cargo's dep-info lists path crates only, so an app that takes Rune from git finds it through cargo metadata.
+    cut=$(tr ' ' '\n' < "${artifact%.wasm}.d" 2>/dev/null | tr '\\' '/' | grep -m1 '/assets/web/first/Inter-Regular\.ttf$' || true)
+    if [[ -z $cut ]]; then
+        cut=$(cargo metadata --format-version 1 --offline 2>/dev/null | grep -o '"manifest_path":"[^"]*crates[/\\]*rune[/\\]*Cargo\.toml"' | head -1 \
+            | sed -e 's/^"manifest_path":"//' -e 's/"$//' -e 's#\\\\#/#g' -e 's#/Cargo\.toml$#/assets/web/first/Inter-Regular.ttf#' || true)
+    fi
+    if [[ -n $cut && -f $cut ]]; then cp "${cut%/first/*}"/Inter-*.ttf "$next/"; fi
     local entry
     for entry in "$next"/*; do
         if [[ -d $entry ]]; then
